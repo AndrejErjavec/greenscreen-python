@@ -113,8 +113,8 @@ def __convolution3D(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
   return out
 
 
-def gaussian_blur(image: np.ndarray, sigma: int, size: list = None) -> np.ndarray:
-  kernel = __gaussian_filter(sigma, size)
+def gaussian_blur(image: np.ndarray, sigma: int, radius: int = None) -> np.ndarray:
+  kernel = __gaussian_filter(sigma, radius)
 
   if (len(image.shape)) == 3:
     blurred = __convolution3D(image, kernel)

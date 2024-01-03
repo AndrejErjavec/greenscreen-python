@@ -13,13 +13,19 @@ def apply_mask(image: np.ndarray, mask: np.ndarray, blackBackground: bool = Fals
   else: out[mask == 0] = 255
   return out
 
+def mask_alpha(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
+  out = image.copy()
+  out = cv2.cvtColor(out, cv2.COLOR_BGR2BGRA)
+  out[:,:,3] = mask
+  return out
+
 # https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization)
-def normalizeImage(image: np.ndarray, alpha:int, beta:int):
+def normalize_image(image: np.ndarray, alpha:int, beta:int) -> np.ndarray:
   min_val, max_val = np.min(image), np.max(image)
   normalized = (image - min_val) * ((beta - alpha) / (max_val - min_val)) + alpha
   return normalized.astype(np.uint8)
 
-def binary_threshold(image, threshold, max_val: int = 255, inverse:bool = False):
+def binary_threshold(image: np.ndarray, threshold: int, max_val: int = 255, inverse:bool = False) -> np.ndarray:
   if len(image.shape) != 2:
     raise Exception('Shape of image not supported')
   
@@ -28,8 +34,8 @@ def binary_threshold(image, threshold, max_val: int = 255, inverse:bool = False)
   else: out[image <= threshold] = max_val
   return out 
 
-# load image
-img = cv2.imread('images/greenscreen.jpg')
+def invert_image(image):
+  return (255 - image).astype(np.uint8)
 
 """
 RGB color space is not ideal for color-based segmentation
@@ -40,42 +46,39 @@ A* --> green to red (-128..127) (-a* = green | +a* = red)
 B? --> blue to yellow (-128..127) (-b* = blue | +b* = yellow)
 """
 
-# convert to LAB
-lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-A = lab[:, :, 1]
+def removeGreenBackground(img: np.ndarray) -> np.ndarray:
+  # convert to LAB
+  lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+  A = lab[:, :, 1]
 
-# histogram of A* channel
-#hist = cv2.calcHist([lab], [1], None, [256], [0, 256])
-#plt.plot(hist)
-#plt.show()
+  # histogram of A* channel
+  #hist = cv2.calcHist([lab], [1], None, [256], [0, 256])
+  #plt.plot(hist)
+  #plt.show()
 
-# create a "binary" mask [0,255]
-[mask, thresh] = otsu_threshold(A, 255, inverted=True)
+  # create a "binary" mask [0,255]
+  [mask, thresh] = otsu_threshold(A, 255, inverted=True)
 
-# apply mask to image
-masked = apply_mask(img, mask)
-cv2.imshow('masked', masked)
-cv2.imwrite('result-before.png', masked)
+  # apply mask to image
+  masked = apply_mask(img, mask)
+  # masked = cv2.cvtColor(masked, cv2.COLOR_LAB2BGR)
 
-# convert back to LAB
-mlab = cv2.cvtColor(masked, cv2.COLOR_BGR2LAB)
-# normalize A channel to use entire [0:255] range
-dst = normalizeImage(mlab[:,:,1], 0, 255)
-# Threshold normalized grayscale image to segment black border representing green outline on original masked image
-[bt, btv] = otsu_threshold(dst, 255)
-threshold_value = 70
-dst_th = binary_threshold(dst, btv, 255)
-cv2.imshow('dst th', dst_th)
+  return masked, mask
 
-# 127 represents white color in A channel (middle between green and red)
-mlab2 = mlab.copy()
-mlab[:,:,1][dst_th == 255] = 127
-result = cv2.cvtColor(mlab, cv2.COLOR_LAB2BGR)
+def removeGreenEdge(image, threshold, mask):
+  # convert back to LAB
+  masked_lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+  # normalize A channel to use entire [0:255] range
+  masked_lab_norm = normalize_image(masked_lab[:,:,1], 0, 255)
 
-img2 = cv2.cvtColor(mlab, cv2.COLOR_LAB2BGR)
-img2[mask==0]=(255,255,255)
-cv2.imshow('result-after', result)
-cv2.imwrite('result-after.png', result)
+  # Threshold normalized grayscale image to segment black border representing green outline on original masked image
+  border_mask = binary_threshold(masked_lab_norm, threshold, 255)
 
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+  border_mask2 = invert_image(border_mask)
+  final_mask = cv2.bitwise_and(mask, border_mask2)
+
+  result = image.copy()
+  result = apply_mask(result, final_mask)
+  result[final_mask == 0] = 0
+  result = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+  return result, border_mask, final_mask
