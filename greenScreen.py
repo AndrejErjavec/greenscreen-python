@@ -80,5 +80,76 @@ def removeGreenEdge(image, threshold, mask):
   result = image.copy()
   result = apply_mask(result, final_mask)
   result[final_mask == 0] = 0
-  result = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+  # result = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
   return result, border_mask, final_mask
+
+
+def alpha_composite(src, dst, src_opacity, mask=None):
+    srcRGB = src[:, :, :3]
+    dstRGB = dst[:, :, :3]
+
+    mask_b = mask == 255
+
+    srcAlpha = src[:, :, 3] / 255.0
+    #src[:, :, 3] / 255.0 * src_opacity
+    srcAlpha[mask_b] = src_opacity
+    dstAlpha = dst[:, :, 3] / 255.0
+
+    outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha)
+
+    outRGB = (srcRGB * srcAlpha[..., np.newaxis] + dstRGB * dstAlpha[..., np.newaxis] * (1 - srcAlpha[..., np.newaxis])) / outAlpha[..., np.newaxis]
+    outRGBA = np.dstack((outRGB, outAlpha * 255)).astype(np.uint8)
+
+    return outRGBA
+
+def main():
+  EDGE_THRESHOLD = 100
+  IMAGE_PATH = 'images/greenscreen.jpg'
+  BACKGROUND_PATH = 'images/background.jpg'
+
+  x = 500
+  y = 200
+
+  image = cv2.imread(IMAGE_PATH)
+  background = cv2.imread(BACKGROUND_PATH)
+
+  removed_bg, subject_mask = removeGreenBackground(image)
+  removed_edge, border_mask, full_mask = removeGreenEdge(removed_bg, EDGE_THRESHOLD, subject_mask)
+  removed_bg = cv2.cvtColor(removed_bg, cv2.COLOR_BGR2LAB)
+  removed_bg[:,:,1][border_mask == 255] = 127
+  removed_bg = cv2.cvtColor(removed_bg, cv2.COLOR_LAB2BGR)
+  removed_bg = mask_alpha(removed_bg, subject_mask)
+
+  im_h, im_w, _ = image.shape
+  background_cut = background[y:y+im_h, x:x+im_w]
+  background_cut = cv2.cvtColor(background_cut, cv2.COLOR_BGR2BGRA)
+
+  result = alpha_composite(removed_bg, background_cut, 0.5, border_mask)
+
+  cv2.imshow('a', result)
+  cv2.imwrite('result.png', result)
+
+  """
+  crop = removed_edge[20:removed_edge.shape[0]-20, 20:removed_edge.shape[1]-20]
+  crop = cv2.resize(crop, (removed_edge.shape[1], removed_edge.shape[0]))
+  crop_blur = gaussian_blur(crop, 2, 2)
+
+  #removed_edge_gray = cv2.cvtColor(removed_edge, cv2.COLOR_BGR2GRAY)
+  removed_edge_t = mask_alpha(removed_edge, full_mask)
+  #removed_edge_rgba = cv2.cvtColor(removed_edge_t, cv2.COLOR_BGR2BGRA)
+  combined = overlay_transparent(crop_blur, removed_edge_t, 0, 0)
+  combined_masked = apply_mask(combined, subject_mask)
+
+  cv2.imshow('removed edge', removed_edge)
+  cv2.imshow('crop', crop)
+  cv2.imshow('combined', combined)
+  cv2.imshow('result', combined_masked)
+
+  cv2.imwrite('result.png', combined_masked)
+  """
+
+  cv2.waitKey()
+  cv2.destroyAllWindows()
+
+if __name__=="__main__":
+  main()

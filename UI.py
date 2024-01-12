@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 import cv2
-from greenScreenLAB import removeGreenBackground, removeGreenEdge, mask_alpha
+from greenScreen import removeGreenBackground, removeGreenEdge, mask_alpha
 
 class ImageThresholdApp:
   def __init__(self, master):
@@ -17,7 +17,7 @@ class ImageThresholdApp:
     self.final_mask = None
     self.threshold_value = tk.DoubleVar()
     self.threshold_value.set(0)
-    self.target_preview_height = 350
+    self.target_preview_height = 300
 
     self.create_widgets()
 
@@ -29,8 +29,10 @@ class ImageThresholdApp:
 
     # Image preview
     self.preview = tk.Label(self.master)
+    #self.preview.grid(row=0, column=0, padx=5, pady=5)
     self.preview.pack(pady=10)
     self.border_preview = tk.Label(self.master)
+    #self.preview.grid(row=0, column=0, padx=5, pady=5)
     self.border_preview.pack(pady=10)
 
     # Threshold slider
